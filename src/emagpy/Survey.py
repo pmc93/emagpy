@@ -357,7 +357,7 @@ class Survey(object):
         """
         cols = ['x','y'] + self.coils + self.coilsInph
         self.df[cols] = self.df[cols].rolling(window).mean()
-        i2discard = self.df[self.coils].isna().any(1)
+        i2discard = self.df[self.coils].isna().any(axis=1)
         self.df = self.df[~i2discard]
         print('dataset shrunk of {:d} measurements'.format(np.sum(i2discard)))        
     
@@ -465,7 +465,7 @@ class Survey(object):
             killed.figure.canvas.draw()
     
         ax.set_title(coil)
-        caxs = ax.plot(xpos, self.df[cols].values, '.-', picker=5)
+        caxs = ax.plot(xpos, self.df[cols].values, '.-', picker=True, pickradius=5)
         ax.legend(cols)
         ax.set_ylim([vmin, vmax])
         ax.set_xlabel('Measurements')
@@ -554,7 +554,8 @@ class Survey(object):
         # plotting histogram
         bins = np.linspace(vmin, vmax, nbins+1) # for 20 bins, we need 21 bin limits
         for c in coils:
-            color = next(ax._get_lines.prop_cycler)["color"]
+            cax = ax.plot([], [])
+            color = cax[0].get_color()
             ax.hist(self.df[c].values, bins=bins, label=c, color=color, 
                     alpha=0.3, edgecolor=color, lw=3)
         ax.legend()
@@ -595,6 +596,10 @@ class Survey(object):
         x = self.df['x'].values
         y = self.df['y'].values
         val = self.df[coil].values
+        inan = ~np.isnan(val)
+        val = val[inan]
+        x = x[inan]
+        y = y[inan]
         if ax is None:
             fig, ax = plt.subplots()
         else:
@@ -614,8 +619,13 @@ class Survey(object):
             cax = ax.scatter(x, y, s=15, c=val, vmin=vmin, vmax=vmax, cmap=cmap)
         ax.set_xlabel(xlab)
         ax.set_ylabel(ylab)
-        ax.set_xlim([np.nanmin(x), np.nanmax(x)])
-        ax.set_ylim([np.nanmin(y), np.nanmax(y)])
+        if len(x) > 0:
+            ax.set_xlim([np.nanmin(x), np.nanmax(x)])
+            ax.set_ylim([np.nanmin(y), np.nanmax(y)])
+        ax.get_xaxis().get_major_formatter().set_useOffset(False) # prevent exponent notation
+        ax.get_yaxis().get_major_formatter().set_useOffset(False)
+        ax.get_xaxis().get_major_formatter().set_scientific(False)
+        ax.get_yaxis().get_major_formatter().set_scientific(False)
         if coil[-5:] == '_inph':
             fig.colorbar(cax, ax=ax, label='Inphase [ppt]')
         else:
@@ -908,6 +918,10 @@ class Survey(object):
         ax.plot(xcoord[icross], ycoord[icross], 'ro', label='crossing points')
         ax.set_xlabel('x [m]')
         ax.set_ylabel('y [m]')
+        ax.get_xaxis().get_major_formatter().set_useOffset(False) # prevent exponent notation
+        ax.get_yaxis().get_major_formatter().set_useOffset(False)
+        ax.get_xaxis().get_major_formatter().set_scientific(False)
+        ax.get_yaxis().get_major_formatter().set_scientific(False)
 
 
     
@@ -1007,6 +1021,9 @@ class Survey(object):
         elif device == 'CMD Explorer':
             freq = 10000
             csep = [1.48, 2.82, 4.49]
+        elif device == 'CMD Mini-Explorer 6L':
+            freq = 30000
+            csep = [0.2, 0.33, 0.5, 0.72, 1.03, 1.5]
         else:
             raise ValueError('Device ' + device + ' unknown.')
 
@@ -1014,8 +1031,16 @@ class Survey(object):
         loCols += [a + '_inph' for a in loCols]
         hiCols = ['HCP{:.2f}'.format(a) for a in csep]
         hiCols += [a + '_inph' for a in hiCols]
-        cols = ['Cond.1[mS/m]', 'Cond.2[mS/m]', 'Cond.3[mS/m]',
-                'Inph.1[ppt]', 'Inph.2[ppt]', 'Inph.3[ppt]']
+        if len(csep) > 3:
+            cols = ['Cond.1[mS/m]', 'Cond.2[mS/m]', 'Cond.3[mS/m]',
+                    'Cond.4[mS/m]', 'Cond.5[mS/m]', 'Cond.6[mS/m]',
+                    'Inph.1[ppt]', 'Inph.2[ppt]', 'Inph.3[ppt]',
+                    'Inph.4[ppt]', 'Inph.5[ppt]', 'Inph.6[ppt]']
+            n = 6
+        else:
+            cols = ['Cond.1[mS/m]', 'Cond.2[mS/m]', 'Cond.3[mS/m]',
+                    'Inph.1[ppt]', 'Inph.2[ppt]', 'Inph.3[ppt]']
+            n = 3
         
         def harmonizeHeaders(df):
             x = df.columns.values
@@ -1024,7 +1049,11 @@ class Survey(object):
                 tmp.append(a.replace(' [','[') # when dowloaded from usb
                             .replace('Cond1.','Cond.1') # when downloaded from usb and manual
                             .replace('Cond2.','Cond.2')
-                            .replace('Cond3.','Cond.3'))
+                            .replace('Cond3.','Cond.3')
+                            .replace('Cond4.','Cond.4')
+                            .replace('Cond5.','Cond.5')
+                            .replace('Cond6.','Cond.6')
+                          )
             df = df.rename(columns=dict(zip(x, tmp)))
             return df
         
@@ -1074,14 +1103,14 @@ class Survey(object):
             df = loFile
             df['x'] = np.arange(df.shape[0])
             df['y'] = 0
-            coils = loCols[:3]
-            coilsInph = loCols[3:]
+            coils = loCols[:n]
+            coilsInph = loCols[n:]
         elif fnameHi is not None:
             df = hiFile
             df['x'] = np.arange(df.shape[0])
             df['y'] = 0
-            coils = hiCols[:3]
-            coilsInph = hiCols[3:]
+            coils = hiCols[:n]
+            coilsInph = hiCols[n:]
         df = df.rename(columns={'Altitude':'elevation'})
 
         if df is not None:

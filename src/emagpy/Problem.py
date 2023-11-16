@@ -715,7 +715,6 @@ class Problem(object):
                 res = minimize(objfunc, x0, args=(obs, pn, spn, alpha, beta, gamma, ini0),
                                method=method, bounds=bounds, options=options)
                 out = res.x  
-                print(res)
             elif method in mMCMC: # MCMC based methods
                 spotpySetup = spotpy_setup(obs, bounds, pn, spn, alpha, beta, 
                                            gamma, ini0, fmodel)
@@ -2177,7 +2176,7 @@ class Problem(object):
         n = vertices.shape[0]
         connection = np.c_[np.arange(n).reshape(-1,2),
                            2*nsample + np.arange(n).reshape(-1,2)[:,::-1]]
-        ie = (connection >= len(vertices)).any(1)
+        ie = (connection >= len(vertices)).any(axis=1)
         connection = connection[~ie, :]
         coordinates = vertices[connection]
         
@@ -3139,6 +3138,10 @@ class Problem(object):
                 ax.plot(x, y, 'k+')
         ax.set_xlabel('x [m]')
         ax.set_ylabel('y [m]')
+        ax.get_xaxis().get_major_formatter().set_useOffset(False) # prevent exponent notation
+        ax.get_yaxis().get_major_formatter().set_useOffset(False)
+        ax.get_xaxis().get_major_formatter().set_scientific(False)
+        ax.get_yaxis().get_major_formatter().set_scientific(False)
         fig.colorbar(cax, ax=ax, label=label)
         # depths = np.r_[[0], self.depths0, [-np.inf]]
         # ax.set_title('{:.2f}m - {:.2f}m'.format(depths[islice], depths[islice+1]))
